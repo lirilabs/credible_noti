@@ -28,47 +28,39 @@ const transporter = nodemailer.createTransport({
 });
 
 /* ======================================================
-   API Handler (QUERY PARAMS)
+   API Handler (WHATWG URL FIX)
 ====================================================== */
 export default async function handler(req, res) {
-  /* =======================
-     CORS – ALLOW ALL
-  ======================= */
+  /* -------- CORS -------- */
   res.setHeader("Access-Control-Allow-Origin", "*");
+  res.setHeader("Access-Control-Allow-Methods", "GET, OPTIONS");
   res.setHeader(
     "Access-Control-Allow-Headers",
-    "Origin, X-Requested-With, Content-Type, Accept, Authorization"
+    "Origin, X-Requested-With, Content-Type, Accept"
   );
-  res.setHeader(
-    "Access-Control-Allow-Methods",
-    "GET, OPTIONS"
-  );
-  res.setHeader("Access-Control-Max-Age", "86400");
 
   if (req.method === "OPTIONS") {
     return res.status(204).end();
   }
 
   if (req.method !== "GET") {
-    return res.status(405).json({
-      error: "Only GET allowed",
-    });
+    return res.status(405).json({ error: "Only GET allowed" });
   }
 
   try {
-    const { uid, title, content } = req.query || {};
+    /* -------- SAFE URL PARSING (NO url.parse) -------- */
+    const url = new URL(req.url, `https://${req.headers.host}`);
+    const uid = url.searchParams.get("uid");
+    const title = url.searchParams.get("title");
+    const content = url.searchParams.get("content");
 
     if (!uid || !title || !content) {
       return res.status(400).json({
-        error: "uid, title and content are required as query params",
+        error: "uid, title and content query params are required",
       });
     }
 
-    /* -------- Decode URL params -------- */
-    const decodedTitle = decodeURIComponent(title);
-    const decodedContent = decodeURIComponent(content);
-
-    /* -------- Get user email -------- */
+    /* -------- Firebase User -------- */
     const user = await admin.auth().getUser(uid);
 
     if (!user.email) {
@@ -77,13 +69,13 @@ export default async function handler(req, res) {
       });
     }
 
-    /* -------- Send email -------- */
+    /* -------- Send Email -------- */
     await transporter.sendMail({
       from: `"Credible" <${process.env.SMTP_EMAIL}>`,
       to: user.email,
-      subject: decodedTitle,
-      text: decodedContent,
-      html: `<p>${decodedContent.replace(/\n/g, "<br/>")}</p>`,
+      subject: title,
+      text: content,
+      html: `<p>${content.replace(/\n/g, "<br/>")}</p>`,
     });
 
     return res.status(200).json({
