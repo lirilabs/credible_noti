@@ -1,7 +1,7 @@
 import admin from "firebase-admin";
 
 /* ======================================================
-   Firebase Admin Initialization (Vercel-safe)
+   Firebase Admin Initialization
 ====================================================== */
 if (!admin.apps.length) {
   const {
@@ -27,21 +27,40 @@ if (!admin.apps.length) {
    FCM API Handler
 ====================================================== */
 export default async function handler(req, res) {
-  // CORS
+  /* =======================
+     CORS – ALLOW ALL
+  ======================= */
   res.setHeader("Access-Control-Allow-Origin", "*");
-  res.setHeader("Access-Control-Allow-Methods", "POST, OPTIONS");
-  res.setHeader("Access-Control-Allow-Headers", "Content-Type");
+  res.setHeader(
+    "Access-Control-Allow-Headers",
+    "Origin, X-Requested-With, Content-Type, Accept, Authorization"
+  );
+  res.setHeader(
+    "Access-Control-Allow-Methods",
+    "POST, OPTIONS"
+  );
 
+  // Preflight
   if (req.method === "OPTIONS") {
-    return res.status(200).end();
+    return res.status(204).end();
   }
 
+  // Method guard
   if (req.method !== "POST") {
-    return res.status(405).json({ error: "Only POST allowed" });
+    return res.status(405).json({
+      error: "Method Not Allowed",
+    });
   }
 
   try {
-    const { token, title, body, imageUrl, clickAction, data = {} } = req.body || {};
+    const {
+      token,
+      title,
+      body,
+      imageUrl,
+      clickAction,
+      data = {},
+    } = req.body || {};
 
     if (!token || !title || !body) {
       return res.status(400).json({
@@ -55,14 +74,14 @@ export default async function handler(req, res) {
       notification: {
         title,
         body,
-        ...(imageUrl && { image: imageUrl }),
+        ...(imageUrl ? { image: imageUrl } : {}),
       },
 
       data: {
         ...Object.fromEntries(
           Object.entries(data).map(([k, v]) => [k, String(v)])
         ),
-        ...(clickAction && { click_action: clickAction }),
+        ...(clickAction ? { click_action: clickAction } : {}),
       },
 
       android: {
@@ -70,7 +89,7 @@ export default async function handler(req, res) {
         notification: {
           channelId: "default",
           sound: "default",
-          ...(imageUrl && { imageUrl }),
+          ...(imageUrl ? { imageUrl } : {}),
         },
       },
 
@@ -82,7 +101,7 @@ export default async function handler(req, res) {
           },
         },
         fcmOptions: {
-          ...(imageUrl && { image: imageUrl }),
+          ...(imageUrl ? { image: imageUrl } : {}),
         },
       },
     };
