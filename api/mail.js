@@ -2,20 +2,24 @@ import admin from "firebase-admin";
 import nodemailer from "nodemailer";
 
 /* ======================================================
-   Firebase Admin Initialization
+   Firebase Admin Initialization (SAFE)
 ====================================================== */
 if (!admin.apps.length) {
-  admin.initializeApp({
-    credential: admin.credential.cert({
-      projectId: process.env.FIREBASE_PROJECT_ID,
-      clientEmail: process.env.FIREBASE_CLIENT_EMAIL,
-      privateKey: process.env.FIREBASE_PRIVATE_KEY.replace(/\\n/g, "\n"),
-    }),
-  });
+  try {
+    admin.initializeApp({
+      credential: admin.credential.cert({
+        projectId: process.env.FIREBASE_PROJECT_ID,
+        clientEmail: process.env.FIREBASE_CLIENT_EMAIL,
+        privateKey: process.env.FIREBASE_PRIVATE_KEY?.replace(/\\n/g, "\n"),
+      }),
+    });
+  } catch (e) {
+    console.error("Firebase init error:", e);
+  }
 }
 
 /* ======================================================
-   SMTP Transport
+   SMTP Transport (SAFE)
 ====================================================== */
 const transporter = nodemailer.createTransport({
   host: "smtp.gmail.com",
@@ -23,12 +27,12 @@ const transporter = nodemailer.createTransport({
   secure: true,
   auth: {
     user: process.env.SMTP_EMAIL,
-    pass: process.env.SMTP_PASSWORD,
+    pass: process.env.SMTP_PASSWORD, // MUST have NO spaces
   },
 });
 
 /* ======================================================
-   API Handler (WHATWG URL FIX)
+   API Handler (SERVERLESS SAFE)
 ====================================================== */
 export default async function handler(req, res) {
   /* -------- CORS -------- */
@@ -48,22 +52,24 @@ export default async function handler(req, res) {
   }
 
   try {
-    /* -------- SAFE URL PARSING (NO url.parse) -------- */
-    const url = new URL(req.url, `https://${req.headers.host}`);
-    const uid = url.searchParams.get("uid");
-    const title = url.searchParams.get("title");
-    const content = url.searchParams.get("content");
+    /* -------- SAFE URL PARSING -------- */
+    const baseUrl = `https://${process.env.VERCEL_URL || "localhost"}`;
+    const parsedUrl = new URL(req.url, baseUrl);
+
+    const uid = parsedUrl.searchParams.get("uid");
+    const title = parsedUrl.searchParams.get("title");
+    const content = parsedUrl.searchParams.get("content");
 
     if (!uid || !title || !content) {
       return res.status(400).json({
-        error: "uid, title and content query params are required",
+        error: "uid, title and content are required",
       });
     }
 
     /* -------- Firebase User -------- */
     const user = await admin.auth().getUser(uid);
 
-    if (!user.email) {
+    if (!user?.email) {
       return res.status(400).json({
         error: "User does not have an email",
       });
@@ -86,7 +92,7 @@ export default async function handler(req, res) {
     });
 
   } catch (err) {
-    console.error("MAIL ERROR:", err);
+    console.error("MAIL FUNCTION CRASH:", err);
     return res.status(500).json({
       success: false,
       error: err.message,
